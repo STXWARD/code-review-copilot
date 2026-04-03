@@ -6,6 +6,10 @@ from src.parser import parse_all_files, get_repo_structure_summary
 from src.scoring import score_all_results
 from src.report import build_full_report, filter_issues
 
+import streamlit as st
+import time
+import os
+os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 # ─── PAGE CONFIG ────────────────────────────────────────────────
 st.set_page_config(
     page_title="Code Review Copilot",
@@ -864,7 +868,7 @@ def run_analysis(github_url: str, token: str = None):
         time.sleep(0.5)
         progress.empty()
         status_text.empty()
-
+        st.session_state.report = report
         return report
 
     except ValueError as e:
