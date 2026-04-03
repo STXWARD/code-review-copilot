@@ -198,6 +198,7 @@ def detect_language(path: str) -> str:
 
 def ingest_repository(github_url: str, token: str = None,
                        progress_callback=None) -> dict:
+    token = token or os.getenv("GITHUB_TOKEN")
     """
     Main function — takes a GitHub URL and returns
     a structured dict of all analyzable files.
