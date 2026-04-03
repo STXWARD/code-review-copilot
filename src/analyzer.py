@@ -66,8 +66,9 @@ def call_groq_with_rotation(messages: list, max_tokens: int = 4096) -> str | Non
                 temperature=0.1,
                 max_tokens=max_tokens,
             )
-            raw = response.choices[0].message.content.strip()
-            return raw
+            if not response.choices:
+                raise Exception("Empty response from Groq")
+            return response.choices[0].message.content.strip()
 
         except Exception as e:
             err_str = str(e)
