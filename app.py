@@ -351,8 +351,15 @@ def render_issue_card(issue: dict):
 
         if issue.get('affected_code'):
             st.markdown("**Affected code:**")
-            lang = issue.get('language', '').lower()
-            st.code(issue['affected_code'], language=lang or 'python')
+            code = issue['affected_code'].replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
+            st.markdown(
+                f"<pre style='background:#0d1117; border:1px solid #21262d; "
+                f"border-radius:6px; padding:14px; font-family:JetBrains Mono,monospace; "
+                f"font-size:12px; color:#e6edf3; overflow-x:auto; "
+                f"white-space:pre-wrap; word-break:break-word;'>"
+                f"<code>{code}</code></pre>",
+                unsafe_allow_html=True
+        )
 
         if issue.get('suggestion'):
             st.markdown(
