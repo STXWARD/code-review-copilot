@@ -580,7 +580,7 @@ def render_dashboard(report: dict):
             st.metric(label, value, delta)
 
     st.divider()
-
+    
     # ── HOTSPOTS + CORRELATIONS ──
     col_hot, col_corr = st.columns(2)
 
