@@ -893,20 +893,11 @@ def main():
         github_url, analyze, token = render_landing()
 
         if analyze and github_url:
-            st.session_state.analyzing = True
-            st.session_state.github_url = github_url
-            st.session_state.token = token
-            st.rerun()
-
-    if st.session_state.get('analyzing') and not st.session_state.report:
-        report = run_analysis(
-            st.session_state.github_url,
-            st.session_state.token or None
-        )
-        if report:
-            st.session_state.report = report
-            st.session_state.analyzing = False
-            st.rerun()
+            with st.spinner(""):
+                report = run_analysis(github_url, token or None)
+                if report:
+                    st.session_state.report = report
+                    st.rerun()
         elif analyze and not github_url:
             st.warning("⚠️ Please enter a GitHub repository URL.")
 
