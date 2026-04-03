@@ -6,10 +6,6 @@ from src.parser import parse_all_files, get_repo_structure_summary
 from src.scoring import score_all_results
 from src.report import build_full_report, filter_issues
 
-import streamlit as st
-import time
-import os
-os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
 # ─── PAGE CONFIG ────────────────────────────────────────────────
 st.set_page_config(
     page_title="Code Review Copilot",
@@ -355,15 +351,8 @@ def render_issue_card(issue: dict):
 
         if issue.get('affected_code'):
             st.markdown("**Affected code:**")
-            code = issue['affected_code'].replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')
-            st.markdown(
-                f"<pre style='background:#0d1117; border:1px solid #21262d; "
-                f"border-radius:6px; padding:14px; font-family:JetBrains Mono,monospace; "
-                f"font-size:12px; color:#e6edf3; overflow-x:auto; "
-                f"white-space:pre-wrap; word-break:break-word;'>"
-                f"<code>{code}</code></pre>",
-                unsafe_allow_html=True
-        )
+            lang = issue.get('language', '').lower()
+            st.code(issue['affected_code'], language=lang or 'python')
 
         if issue.get('suggestion'):
             st.markdown(
@@ -584,7 +573,7 @@ def render_dashboard(report: dict):
             st.metric(label, value, delta)
 
     st.divider()
-    
+
     # ── HOTSPOTS + CORRELATIONS ──
     col_hot, col_corr = st.columns(2)
 
@@ -868,7 +857,7 @@ def run_analysis(github_url: str, token: str = None):
         time.sleep(0.5)
         progress.empty()
         status_text.empty()
-        st.session_state.report = report
+
         return report
 
     except ValueError as e:
