@@ -10,53 +10,36 @@ import re
 load_dotenv()
 
 # ─── API KEY ROTATION ────────────────────────────────────────────
-# Load up to 3 keys. Missing / empty keys are filtered out gracefully,
-# so the app works with just 1 or 2 keys set in .env.
 _ALL_KEYS: list[str] = [
     k for k in [
         os.getenv("GROQ_API_KEY_1"),
         os.getenv("GROQ_API_KEY_2"),
         os.getenv("GROQ_API_KEY_3"),
     ]
-    if k  # drop None and empty strings
+    if k
 ]
 
 if not _ALL_KEYS:
-    # Fallback: support legacy single-key .env so existing setups keep working
     _legacy = os.getenv("GROQ_API_KEY")
     if _legacy:
         _ALL_KEYS = [_legacy]
 
-_current_key_index: int = 0  # mutable global; rotated by rotate_key()
+_current_key_index: int = 0
 
 
 def get_groq_client() -> Groq:
-    """Return a Groq client for whichever key is currently active."""
     if not _ALL_KEYS:
         raise RuntimeError("No Groq API keys found. Set GROQ_API_KEY_1 in .env")
     return Groq(api_key=_ALL_KEYS[_current_key_index])
 
 
 def rotate_key() -> bool:
-    """
-    Advance to the next API key.
-    Returns True if a new key is now active, False if all keys are exhausted.
-    """
     global _current_key_index
     _current_key_index += 1
     return _current_key_index < len(_ALL_KEYS)
 
 
 def call_groq_with_rotation(messages: list, max_tokens: int = 4096) -> str | None:
-    """
-    Call Groq chat completions with automatic key rotation on 429.
-
-    Workflow:
-        1. Try the current key.
-        2. On 429 / rate-limit error → rotate_key() → retry.
-        3. Repeat until a key succeeds OR all keys are exhausted.
-        4. Return the raw response string, or None when every key is spent.
-    """
     while True:
         try:
             client = get_groq_client()
@@ -78,33 +61,21 @@ def call_groq_with_rotation(messages: list, max_tokens: int = 4096) -> str | Non
                 or 'TPD' in err_str
                 or 'rate_limit_exceeded' in err_str.lower()
             )
-
             if is_rate_limit:
                 has_next = rotate_key()
                 if has_next:
-                    # Silent rotation — caller never sees this exception
                     time.sleep(0.5)
                     continue
                 else:
-                    # All keys exhausted — surface as None so caller can handle cleanly
                     return None
             else:
-                # Non-rate-limit error: re-raise so analyze_file handles it normally
                 raise
 
-# ─── TOKEN BUDGET CONTROL ────────────────────────────────────────
-# 3,000 chars ≈ 750 tokens per file.
-# With 15 files that's ~45k tokens per full scan — staying well
-# under Groq's 100k TPD free limit and allowing ~2 full scans/day.
+
 MAX_FILE_CHARS = 3_000
 
 
 def truncate_content(content: str, max_chars: int = MAX_FILE_CHARS) -> str:
-    """
-    Cap file content before sending to Groq to control token spend.
-    Truncates at the last newline before max_chars so we don't cut
-    mid-line, then appends a comment so the model knows it's partial.
-    """
     if len(content) <= max_chars:
         return content
     truncated = content[:max_chars].rsplit('\n', 1)[0]
@@ -158,16 +129,12 @@ Find all bugs, security vulnerabilities, performance issues, and code smells.
 Return ONLY a JSON array of issues. No other text.
 
 CODE:
-````{language.lower()}
+```{language.lower()}
 {code}
 ```"""
 
 
 def analyze_file(file_data: dict) -> dict:
-    """
-    Analyze a single file using Groq API.
-    Returns file_data enriched with 'issues' key.
-    """
     path = file_data['path']
     language = file_data['language']
     content = file_data['content']
@@ -187,7 +154,6 @@ def analyze_file(file_data: dict) -> dict:
             ]
         )
 
-        # None means every API key is exhausted
         if raw is None:
             result['analysis_status'] = 'rate_limited'
             result['error'] = 'All API keys exhausted (rate_limit)'
@@ -196,7 +162,6 @@ def analyze_file(file_data: dict) -> dict:
 
         raw = raw.strip()
 
-        # Clean markdown fences if present
         if raw.startswith("```"):
             lines = raw.split('\n')
             raw = '\n'.join(lines[1:-1])
@@ -208,12 +173,14 @@ def analyze_file(file_data: dict) -> dict:
             return result
 
         issues = json.loads(raw)
-        
-        # Groq sometimes returns a dict instead of a list
+
         if isinstance(issues, dict):
             issues = issues.get('issues', [])
         if not isinstance(issues, list):
             issues = []
+
+        cleaned = []
+        for i, issue in enumerate(issues):
             cleaned.append({
                 'id': issue.get('id', f'ISSUE{i+1:03d}'),
                 'severity': issue.get('severity', 'Medium'),
@@ -239,16 +206,12 @@ def analyze_file(file_data: dict) -> dict:
 
     except Exception as e:
         err_str = str(e)
-
-        # ── Groq 429 / daily token limit ────────────────────────────
-        # Error message format: "Error code: 429 - ... Please try again in Xh Ym Zs."
         if '429' in err_str or 'rate limit' in err_str.lower() or 'TPD' in err_str:
             wait_match = re.search(
                 r'try again in\s+((?:\d+h)?\s*(?:\d+m)?\s*(?:\d+s)?)',
                 err_str, re.IGNORECASE
             )
             wait_time = wait_match.group(1).strip() if wait_match else 'unknown'
-
             result['analysis_status'] = 'rate_limited'
             result['error'] = err_str
             result['rate_limit_wait'] = wait_time
@@ -261,18 +224,12 @@ def analyze_file(file_data: dict) -> dict:
 
 
 def analyze_repository(files: list, progress_callback=None) -> list:
-    """
-    Analyze all files in parallel using ThreadPoolExecutor.
-    Returns list of file results with issues.
-    """
     results = []
     total = len(files)
 
     if progress_callback:
-        progress_callback(f"🤖 Starting AI analysis on {total} files...")
+        progress_callback(f"Starting AI analysis on {total} files...")
 
-    # Groq free tier: be careful with parallelism
-    # max_workers=3 keeps us under rate limits
     with ThreadPoolExecutor(max_workers=3) as executor:
         future_to_file = {
             executor.submit(analyze_file, f): f for f in files
@@ -305,7 +262,6 @@ def analyze_repository(files: list, progress_callback=None) -> list:
                         f"— {status}: {result.get('error','')[:80]}"
                     )
 
-            # Small delay to respect Groq rate limits
             time.sleep(0.5)
 
     results.sort(key=lambda x: len(x.get('issues', [])), reverse=True)
@@ -313,7 +269,6 @@ def analyze_repository(files: list, progress_callback=None) -> list:
 
 
 def get_summary_stats(results: list) -> dict:
-    """Calculate summary statistics across all analyzed files."""
     total_issues = 0
     severity_counts = {
         'Critical': 0, 'High': 0,
