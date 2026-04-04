@@ -208,9 +208,12 @@ def analyze_file(file_data: dict) -> dict:
             return result
 
         issues = json.loads(raw)
-
-        cleaned = []
-        for i, issue in enumerate(issues):
+        
+        # Groq sometimes returns a dict instead of a list
+        if isinstance(issues, dict):
+            issues = issues.get('issues', [])
+        if not isinstance(issues, list):
+            issues = []
             cleaned.append({
                 'id': issue.get('id', f'ISSUE{i+1:03d}'),
                 'severity': issue.get('severity', 'Medium'),
