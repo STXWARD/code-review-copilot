@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import threading                          # ← added
 from groq import Groq
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -25,18 +26,24 @@ if not _ALL_KEYS:
         _ALL_KEYS = [_legacy]
 
 _current_key_index: int = 0
+_key_lock = threading.Lock()              # ← added
 
 
 def get_groq_client() -> Groq:
     if not _ALL_KEYS:
         raise RuntimeError("No Groq API keys found. Set GROQ_API_KEY_1 in .env")
-    return Groq(api_key=_ALL_KEYS[_current_key_index])
+    safe_index = _current_key_index % len(_ALL_KEYS)   # ← changed
+    return Groq(api_key=_ALL_KEYS[safe_index])
 
 
 def rotate_key() -> bool:
     global _current_key_index
-    _current_key_index += 1
-    return _current_key_index < len(_ALL_KEYS)
+    with _key_lock:                        # ← changed
+        _current_key_index += 1
+        if _current_key_index >= len(_ALL_KEYS):
+            _current_key_index = 0
+            return False
+        return True
 
 
 def call_groq_with_rotation(messages: list, max_tokens: int = 4096) -> str | None:
