@@ -71,7 +71,7 @@ def call_groq_with_rotation(messages: list, max_tokens: int = 4096) -> str | Non
             if is_rate_limit:
                 has_next = rotate_key()
                 if has_next:
-                    time.sleep(0.5)
+                    time.sleep(0.2)
                     continue
                 else:
                     return None
@@ -237,7 +237,7 @@ def analyze_repository(files: list, progress_callback=None) -> list:
     if progress_callback:
         progress_callback(f"Starting AI analysis on {total} files...")
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         future_to_file = {
             executor.submit(analyze_file, f): f for f in files
         }
@@ -269,7 +269,7 @@ def analyze_repository(files: list, progress_callback=None) -> list:
                         f"— {status}: {result.get('error','')[:80]}"
                     )
 
-            time.sleep(0.5)
+            time.sleep(0.2)
 
     results.sort(key=lambda x: len(x.get('issues', [])), reverse=True)
     return results
