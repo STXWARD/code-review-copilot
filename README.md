@@ -3,7 +3,7 @@
 AI-powered code review tool that analyzes any GitHub repository for bugs, security vulnerabilities, performance issues, and code smells using Groq (LLaMA 3.3-70B).
 
 ## Live Demo
-https://code-review-copilot-6mrbf6qjzkohl2qyxyzsrz.streamlit.app/
+https://code-review-copilot.streamlit.app/
 
 ## Screenshot
 ![Code Review Copilot](screenshot.png)
